@@ -32,8 +32,11 @@ static func extract_blend_shape_from_mesh_combiner(p_mesh_combiner, p_blend_shap
 	var index = p_mesh_combiner.blend_shape_names.find(p_blend_shape_name)
 	if index != -1:
 		for mesh_surface in p_mesh_combiner.surfaces:
-			var blend_shape_surface = blend_shape_data_const.BlendShapeSurface.new()
+			var blend_shape_surface = {}
 			blend_shape_surface.name = mesh_surface.name
+			blend_shape_surface.index_array = IntArray()
+			blend_shape_surface.position_array = Vector3Array()
+			blend_shape_surface.normal_array = Vector3Array()
 			
 			var base_arrays = mesh_surface.arrays
 			var blend_shape_arrays = mesh_surface.morph_arrays[index]

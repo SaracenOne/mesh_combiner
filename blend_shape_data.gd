@@ -1,6 +1,7 @@
 extends Resource
 tool
 
+# Todo: cannot serialize this as a subresource from another resource. Bug?
 class BlendShapeSurface extends Resource:
 	export(String) var name = ""
 	export(IntArray) var index_array = IntArray()
