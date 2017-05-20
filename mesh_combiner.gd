@@ -45,7 +45,6 @@ func generate_mesh():
 		mesh.add_surface(surface.primitive, surface.arrays, surface.morph_arrays, surface.alphasort)
 		mesh.surface_set_name(mesh.get_surface_count() - 1, surface.name)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, surface.material)
-	print(blend_shape_mode)
 	mesh.set_morph_target_mode(blend_shape_mode)
 
 	return mesh
@@ -87,9 +86,11 @@ static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_f
 						combined_array.append(original_array[j])
 				# Do we need to resize the UV?
 				if(new_array != null):
-					if i == Mesh.ARRAY_TEX_UV and (p_uv_min == Vector2(0.0, 0.0) or p_uv_min == Vector2(1.0, 1.0)):
+					if i == Mesh.ARRAY_TEX_UV and (p_uv_min != Vector2(0.0, 0.0) or p_uv_max != Vector2(1.0, 1.0)):
+						var uv_min3 = Vector3(p_uv_min.x, p_uv_min.y, 0.0)
+						var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
 						for j in range(0, new_array.size()):
-							combined_array.append(Vector3(p_uv_min.x, p_uv_min.y, 0.0) + (new_array[j] * Vector3(p_uv_max.x, p_uv_max.y, 0.0)) * (Vector3(1.0, 1.0, 1.0) - Vector3(p_uv_min.x, p_uv_min.y, 0.0)))
+							combined_array.append(uv_min3 + (new_array[j] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3))
 					else:
 						for j in range(0, new_array.size()):
 							combined_array.append(new_array[j])
@@ -219,6 +220,16 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface_morph_array[index], morph_surface_format, p_uv_min, p_uv_max))
 
 			# Now add it to the list of new surface
+			if p_uv_min != Vector2(0.0, 0.0) or p_uv_max != Vector2(1.0, 1.0):
+				if new_surface.arrays.size() >= Mesh.ARRAY_TEX_UV:
+					var tex_uv_array = new_surface.arrays[Mesh.ARRAY_TEX_UV]
+					
+					var uv_min3 = Vector3(p_uv_min.x, p_uv_min.y, 0.0)
+					var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
+					for j in range(0, tex_uv_array.size()):
+						tex_uv_array[j] = uv_min3 + (tex_uv_array[j] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3)
+					
+					new_surface.arrays[Mesh.ARRAY_TEX_UV] = tex_uv_array
 			surfaces.append(new_surface)
 			surface_formats.append(new_surface_format)
 
