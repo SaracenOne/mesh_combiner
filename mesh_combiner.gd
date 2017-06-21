@@ -88,9 +88,12 @@ static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_f
 						var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
 						for j in range(0, new_array.size()):
 							combined_array.append(uv_min3 + (new_array[j] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3))
-					elif ((i == Mesh.ARRAY_VERTEX or i == Mesh.ARRAY_NORMAL) and p_transform != Transform()):
+					elif ((i == Mesh.ARRAY_VERTEX) and p_transform != Transform()):
 						for j in range(0, new_array.size()):
 							combined_array.append(p_transform.xform(new_array[j]))
+					elif ((i == Mesh.ARRAY_NORMAL) and p_transform != Transform()):
+						for j in range(0, new_array.size()):
+							combined_array.append(p_transform.basis.xform(new_array[j]))
 					else:
 						for j in range(0, new_array.size()):
 							combined_array.append(new_array[j])
@@ -239,7 +242,7 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 				if new_surface.arrays.size() >= Mesh.ARRAY_NORMAL:
 					var normal_array = new_surface.arrays[Mesh.ARRAY_NORMAL]
 					for j in range(0, normal_array.size()):
-						normal_array[j] = p_transform.xform(normal_array[j])
+						normal_array[j] = p_transform.basis.xform(normal_array[j])
 					new_surface.arrays[Mesh.ARRAY_NORMAL] = normal_array
 					
 			surfaces.append(new_surface)
