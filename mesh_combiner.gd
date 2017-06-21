@@ -7,9 +7,6 @@ var surface_formats = []
 var blend_shape_names = []
 var blend_shape_mode = -1
 
-func _init():
-	pass
-
 static func get_surface_arrays_format(p_surface_arrays):
 	var format = 0
 	for i in range(0, p_surface_arrays.size()):
@@ -49,7 +46,7 @@ func generate_mesh():
 
 	return mesh
 
-static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_format, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0)):
+static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_format, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_transform = Transform()):
 	var combined_surface_array = Array()
 
 	for i in range(0, VisualServer.ARRAY_MAX):
@@ -91,6 +88,9 @@ static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_f
 						var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
 						for j in range(0, new_array.size()):
 							combined_array.append(uv_min3 + (new_array[j] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3))
+					elif ((i == Mesh.ARRAY_VERTEX or i == Mesh.ARRAY_NORMAL) and p_transform != Transform()):
+						for j in range(0, new_array.size()):
+							combined_array.append(p_transform.xform(new_array[j]))
 					else:
 						for j in range(0, new_array.size()):
 							combined_array.append(new_array[j])
@@ -98,7 +98,7 @@ static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_f
 
 	return combined_surface_array
 	
-func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0)):
+func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_transform = Transform()):
 	var new_append_mesh_combiner = Reference.new()
 	new_append_mesh_combiner.set_script(get_script())
 	
@@ -111,9 +111,9 @@ func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vecto
 		
 	new_append_mesh_combiner.blend_shape_mode = p_addition_mesh.get_morph_target_mode()
 	
-	append_mesh_combiner(new_append_mesh_combiner, p_uv_min, p_uv_max)
+	append_mesh_combiner(new_append_mesh_combiner, p_uv_min, p_uv_max, p_transform)
 	
-func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0)):
+func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_transform = Transform()):
 	if(p_addition == null):
 		return
 
@@ -152,19 +152,17 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 		var matching_new_surface_id = -1
 
 		# Determine if there is a matching surface in the new addition mesh
-		for j in range(p_addition.surfaces.size()):
-			matching_new_surface_id = find_surface_by_name(p_addition.surfaces[j].name)
-			# Break loop if a match is found
-			if matching_new_surface_id != -1:
-				new_surface = p_addition.surfaces[j]
-				new_surface_format = p_addition.surface_formats[j]
-				break # Found!
+		matching_new_surface_id = p_addition.find_surface_by_name(surfaces[i].name)
+		# Break loop if a match is found
+		if matching_new_surface_id != -1:
+			new_surface = p_addition.surfaces[matching_new_surface_id]
+			new_surface_format = p_addition.surface_formats[matching_new_surface_id]
 
 		if matching_new_surface_id == -1:
 			# This surface does not have match in the new set
 			# Simply add in the new blend shapes /
 			for j in range(0, new_blend_shape_names.size()):
-				surfaces[i].morph_arrays.append(combine_surface_arrays(null, surfaces[i].arrays, morph_surface_format, p_uv_min, p_uv_max)) # Copy blend data for additional blend tracks (?)
+				surfaces[i].morph_arrays.append(combine_surface_arrays(null, surfaces[i].arrays, morph_surface_format, p_uv_min, p_uv_max, p_transform)) # Copy blend data for additional blend tracks (?)
 		else:
 			# This surface has a matching surface name in the new set
 			# Combine the verticies and blend shapes
@@ -177,20 +175,20 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 				var index = addition_blend_shape_names.find(blend_shape_names[j])
 				if index != -1:
 					# Append the additional morph data onto the original morph data
-					surfaces[i].morph_arrays[j] = combine_surface_arrays(surfaces[i].morph_arrays[j], new_surface.morph_arrays[index], morph_surface_format, p_uv_min, p_uv_max)
+					surfaces[i].morph_arrays[j] = combine_surface_arrays(surfaces[i].morph_arrays[j], new_surface.morph_arrays[index], morph_surface_format, p_uv_min, p_uv_max, p_transform)
 				else:
 					# Append the copy of the new surface to use as dummy morph data extension
-					surfaces[i].morph_arrays[j] = combine_surface_arrays(surfaces[i].morph_arrays[j], new_surface.arrays, morph_surface_format, p_uv_min, p_uv_max)
+					surfaces[i].morph_arrays[j] = combine_surface_arrays(surfaces[i].morph_arrays[j], new_surface.arrays, morph_surface_format, p_uv_min, p_uv_max, p_transform)
 					
 			# Add blend shapes unique to this set
 			for j in range(0, new_blend_shape_names.size()):
 				var index = addition_blend_shape_names.find(new_blend_shape_names[j])
 				if index != -1:
 					# Append the additional morph data onto a copy of the untouched surface arrays
-					surfaces[i].morph_arrays.append(combine_surface_arrays(surfaces[i].arrays, new_surface.morph_arrays[index], morph_surface_format, p_uv_min, p_uv_max))
+					surfaces[i].morph_arrays.append(combine_surface_arrays(surfaces[i].arrays, new_surface.morph_arrays[index], morph_surface_format, p_uv_min, p_uv_max, p_transform))
 					
 			# Append the extra surface data
-			surfaces[i].arrays = combine_surface_arrays(surfaces[i].arrays, new_surface.arrays, original_surface_format)
+			surfaces[i].arrays = combine_surface_arrays(surfaces[i].arrays, new_surface.arrays, original_surface_format, p_uv_min, p_uv_max, p_transform)
 
 	# Add new surfaces
 	for i in range(0, p_addition.surfaces.size()):
@@ -209,15 +207,15 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 			for j in range(0, blend_shape_names.size()):
 				var index = addition_blend_shape_names.find(blend_shape_names[j])
 				if index != -1:
-					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface_morph_array[index], morph_surface_format, p_uv_min, p_uv_max))
+					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface_morph_array[index], morph_surface_format, p_uv_min, p_uv_max, p_transform))
 				else:
-					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface.arrays, morph_surface_format, p_uv_min, p_uv_max))
+					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface.arrays, morph_surface_format, p_uv_min, p_uv_max, p_transform))
 
 			# Add blend shapes unique to this set
 			for j in range(0, new_blend_shape_names.size()):
 				var index = addition_blend_shape_names.find(new_blend_shape_names[j])
 				if not index == -1:
-					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface_morph_array[index], morph_surface_format, p_uv_min, p_uv_max))
+					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface_morph_array[index], morph_surface_format, p_uv_min, p_uv_max, p_transform))
 
 			# Now add it to the list of new surface
 			if p_uv_min != Vector2(0.0, 0.0) or p_uv_max != Vector2(1.0, 1.0):
@@ -230,6 +228,20 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 						tex_uv_array[j] = uv_min3 + (tex_uv_array[j] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3)
 					
 					new_surface.arrays[Mesh.ARRAY_TEX_UV] = tex_uv_array
+			
+			# Transform the verticies
+			if p_transform != Transform():
+				if new_surface.arrays.size() >= Mesh.ARRAY_VERTEX:
+					var vertex_array = new_surface.arrays[Mesh.ARRAY_VERTEX]
+					for j in range(0, vertex_array.size()):
+						vertex_array[j] = p_transform.xform(vertex_array[j])
+					new_surface.arrays[Mesh.ARRAY_VERTEX] = vertex_array
+				if new_surface.arrays.size() >= Mesh.ARRAY_NORMAL:
+					var normal_array = new_surface.arrays[Mesh.ARRAY_NORMAL]
+					for j in range(0, normal_array.size()):
+						normal_array[j] = p_transform.xform(normal_array[j])
+					new_surface.arrays[Mesh.ARRAY_NORMAL] = normal_array
+					
 			surfaces.append(new_surface)
 			surface_formats.append(new_surface_format)
 
