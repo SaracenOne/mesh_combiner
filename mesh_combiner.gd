@@ -1,6 +1,8 @@
 tool
 extends Reference
 
+const SURFACE_FORMAT_BITS = ArrayMesh.ARRAY_FORMAT_VERTEX + ArrayMesh.ARRAY_FORMAT_NORMAL + ArrayMesh.ARRAY_FORMAT_TANGENT + ArrayMesh.ARRAY_FORMAT_COLOR + ArrayMesh.ARRAY_FORMAT_TEX_UV + ArrayMesh.ARRAY_FORMAT_TEX_UV2 + ArrayMesh.ARRAY_FORMAT_BONES + ArrayMesh.ARRAY_FORMAT_WEIGHTS + ArrayMesh.ARRAY_FORMAT_INDEX
+
 var surfaces = []
 var surface_formats = []
 
@@ -16,12 +18,12 @@ static func get_surface_arrays_format(p_surface_arrays):
 	return format
 
 static func strip_blend_shape_format(p_format):
-	if p_format & Mesh.ARRAY_FORMAT_BONES:
-		p_format -= Mesh.ARRAY_FORMAT_BONES
-	if p_format & Mesh.ARRAY_FORMAT_WEIGHTS:
-		p_format -= Mesh.ARRAY_FORMAT_WEIGHTS
-	if p_format & Mesh.ARRAY_FORMAT_INDEX:
-		p_format -= Mesh.ARRAY_FORMAT_INDEX
+	if p_format & ArrayMesh.ARRAY_FORMAT_BONES:
+		p_format -= ArrayMesh.ARRAY_FORMAT_BONES
+	if p_format & ArrayMesh.ARRAY_FORMAT_WEIGHTS:
+		p_format -= ArrayMesh.ARRAY_FORMAT_WEIGHTS
+	if p_format & ArrayMesh.ARRAY_FORMAT_INDEX:
+		p_format -= ArrayMesh.ARRAY_FORMAT_INDEX
 	return p_format
 
 func find_surface_by_name(p_surface_name):
@@ -33,35 +35,35 @@ func find_surface_by_name(p_surface_name):
 	return -1
 
 func generate_mesh():
-	var mesh = Mesh.new()
+	var mesh = ArrayMesh.new()
 
 	for blend_shape_name in blend_shape_names:
-		mesh.add_morph_target(blend_shape_name)
+		mesh.add_blend_shape(blend_shape_name)
 
 	for surface in surfaces:
-		mesh.add_surface(surface.primitive, surface.arrays, surface.morph_arrays, surface.alphasort)
+		mesh.add_surface_from_arrays(surface.primitive, surface.arrays, surface.morph_arrays)
 		mesh.surface_set_name(mesh.get_surface_count() - 1, surface.name)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, surface.material)
-	mesh.set_morph_target_mode(blend_shape_mode)
+	mesh.set_blend_shape_mode(blend_shape_mode)
 
 	return mesh
 
 static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_format, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_transform = Transform()):
-	var combined_surface_array = Array()
+	var combined_surface_array = []
 
-	for i in range(0, VisualServer.ARRAY_MAX):
+	for i in range(0, ArrayMesh.ARRAY_MAX):
 		var combined_array = null
 		if p_original_format & (1<<i):
 			var new_array = p_new_arrays[i]
 			var original_array = null
 			if(p_original_arrays != null):
 				original_array = p_original_arrays[i]
-			if i == Mesh.ARRAY_INDEX:
-				combined_array = IntArray()
+			if i == ArrayMesh.ARRAY_INDEX:
+				combined_array = PoolIntArray()
 				var original_surface_index_count = 0
 				
 				if(p_original_arrays != null):
-					original_surface_index_count = p_original_arrays[Mesh.ARRAY_VERTEX].size()
+					original_surface_index_count = p_original_arrays[ArrayMesh.ARRAY_VERTEX].size()
 					
 				if(original_array != null):
 					for j in range(0, original_array.size()):
@@ -71,27 +73,27 @@ static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_f
 					for j in range(0, new_array.size()):
 						combined_array.append(original_surface_index_count + new_array[j])
 			else:
-				if i == Mesh.ARRAY_TANGENT or i == Mesh.ARRAY_WEIGHTS or i == Mesh.ARRAY_BONES:
-					combined_array = FloatArray()
-				elif i == Mesh.ARRAY_COLOR:
-					combined_array = ColorArray()
+				if i == ArrayMesh.ARRAY_TANGENT or i == ArrayMesh.ARRAY_WEIGHTS or i == ArrayMesh.ARRAY_BONES:
+					combined_array = PoolRealArray()
+				elif i == ArrayMesh.ARRAY_COLOR:
+					combined_array = PoolColorArray()
 				else:
-					combined_array = Vector3Array()
+					combined_array = PoolVector3Array()
 					
 				if(original_array != null):
 					for j in range(0, original_array.size()):
 						combined_array.append(original_array[j])
 				# Do we need to resize the UV?
 				if(new_array != null):
-					if i == Mesh.ARRAY_TEX_UV and (p_uv_min != Vector2(0.0, 0.0) or p_uv_max != Vector2(1.0, 1.0)):
+					if i == ArrayMesh.ARRAY_TEX_UV and (p_uv_min != Vector2(0.0, 0.0) or p_uv_max != Vector2(1.0, 1.0)):
 						var uv_min3 = Vector3(p_uv_min.x, p_uv_min.y, 0.0)
 						var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
 						for j in range(0, new_array.size()):
 							combined_array.append(uv_min3 + (new_array[j] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3))
-					elif ((i == Mesh.ARRAY_VERTEX) and p_transform != Transform()):
+					elif ((i == ArrayMesh.ARRAY_VERTEX) and p_transform != Transform()):
 						for j in range(0, new_array.size()):
 							combined_array.append(p_transform.xform(new_array[j]))
-					elif ((i == Mesh.ARRAY_NORMAL) and p_transform != Transform()):
+					elif ((i == ArrayMesh.ARRAY_NORMAL) and p_transform != Transform()):
 						for j in range(0, new_array.size()):
 							combined_array.append(p_transform.basis.xform(new_array[j]))
 					else:
@@ -102,19 +104,28 @@ static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_f
 	return combined_surface_array
 	
 func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_transform = Transform()):
-	var new_append_mesh_combiner = Reference.new()
-	new_append_mesh_combiner.set_script(get_script())
+	if p_addition_mesh is ArrayMesh:
+		var new_append_mesh_combiner = Reference.new()
+		new_append_mesh_combiner.set_script(get_script())
 	
-	for i in range(p_addition_mesh.get_surface_count()):
-		new_append_mesh_combiner.surfaces.append(p_addition_mesh.get("surfaces/" + str(i)))
-		new_append_mesh_combiner.surface_formats.append(p_addition_mesh.surface_get_format(i))
+		for i in range(p_addition_mesh.get_surface_count()):
+			var new_surface = {}
+			new_surface.name = p_addition_mesh.surface_get_name(i)
+			new_surface.primitive = p_addition_mesh.surface_get_primitive_type(i)
+			new_surface.material = p_addition_mesh.surface_get_material(i)
+			new_surface.arrays = p_addition_mesh.surface_get_arrays(i)
+			new_surface.morph_arrays = p_addition_mesh.surface_get_blend_shape_arrays(i)
+			new_append_mesh_combiner.surfaces.append(new_surface)
+			
+			var format = p_addition_mesh.surface_get_format(i) & SURFACE_FORMAT_BITS
+			new_append_mesh_combiner.surface_formats.append(format)
 		
-	for i in range(p_addition_mesh.get_morph_target_count()):
-		new_append_mesh_combiner.blend_shape_names.append(p_addition_mesh.get_morph_target_name(i))
+		for i in range(p_addition_mesh.get_blend_shape_count()):
+			new_append_mesh_combiner.blend_shape_names.append(p_addition_mesh.get_blend_shape_name(i))
 		
-	new_append_mesh_combiner.blend_shape_mode = p_addition_mesh.get_morph_target_mode()
+		new_append_mesh_combiner.blend_shape_mode = p_addition_mesh.get_blend_shape_mode()
 	
-	append_mesh_combiner(new_append_mesh_combiner, p_uv_min, p_uv_max, p_transform)
+		append_mesh_combiner(new_append_mesh_combiner, p_uv_min, p_uv_max, p_transform)
 	
 func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_transform = Transform()):
 	if(p_addition == null):
@@ -192,8 +203,6 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 					
 			# Append the extra surface data
 			surfaces[i].arrays = combine_surface_arrays(surfaces[i].arrays, new_surface.arrays, original_surface_format, p_uv_min, p_uv_max, p_transform)
-
-	# Add new surfaces
 	for i in range(0, p_addition.surfaces.size()):
 		var new_surface = p_addition.surfaces[i]
 		if find_surface_by_name(new_surface.name) == -1:
@@ -222,28 +231,28 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 
 			# Now add it to the list of new surface
 			if p_uv_min != Vector2(0.0, 0.0) or p_uv_max != Vector2(1.0, 1.0):
-				if new_surface.arrays.size() >= Mesh.ARRAY_TEX_UV:
-					var tex_uv_array = new_surface.arrays[Mesh.ARRAY_TEX_UV]
+				if new_surface.arrays.size() >= ArrayMesh.ARRAY_TEX_UV:
+					var tex_uv_array = new_surface.arrays[ArrayMesh.ARRAY_TEX_UV]
 					
 					var uv_min3 = Vector3(p_uv_min.x, p_uv_min.y, 0.0)
 					var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
 					for j in range(0, tex_uv_array.size()):
 						tex_uv_array[j] = uv_min3 + (tex_uv_array[j] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3)
 					
-					new_surface.arrays[Mesh.ARRAY_TEX_UV] = tex_uv_array
+					new_surface.arrays[ArrayMesh.ARRAY_TEX_UV] = tex_uv_array
 			
 			# Transform the verticies
 			if p_transform != Transform():
-				if new_surface.arrays.size() >= Mesh.ARRAY_VERTEX:
-					var vertex_array = new_surface.arrays[Mesh.ARRAY_VERTEX]
+				if new_surface.arrays.size() >= ArrayMesh.ARRAY_VERTEX:
+					var vertex_array = new_surface.arrays[ArrayMesh.ARRAY_VERTEX]
 					for j in range(0, vertex_array.size()):
 						vertex_array[j] = p_transform.xform(vertex_array[j])
-					new_surface.arrays[Mesh.ARRAY_VERTEX] = vertex_array
-				if new_surface.arrays.size() >= Mesh.ARRAY_NORMAL:
-					var normal_array = new_surface.arrays[Mesh.ARRAY_NORMAL]
+					new_surface.arrays[ArrayMesh.ARRAY_VERTEX] = vertex_array
+				if new_surface.arrays.size() >= ArrayMesh.ARRAY_NORMAL:
+					var normal_array = new_surface.arrays[ArrayMesh.ARRAY_NORMAL]
 					for j in range(0, normal_array.size()):
 						normal_array[j] = p_transform.basis.xform(normal_array[j])
-					new_surface.arrays[Mesh.ARRAY_NORMAL] = normal_array
+					new_surface.arrays[ArrayMesh.ARRAY_NORMAL] = normal_array
 					
 			surfaces.append(new_surface)
 			surface_formats.append(new_surface_format)

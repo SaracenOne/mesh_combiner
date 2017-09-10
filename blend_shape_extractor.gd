@@ -52,7 +52,7 @@ static func extract_blend_shape_from_mesh_combiner(p_mesh_combiner, p_blend_shap
 					var new_value = null
 					if array_index == Mesh.ARRAY_VERTEX or array_index == Mesh.ARRAY_NORMAL:
 						if (base_array[vertex_index].distance_to(blend_shape_array[vertex_index]) > 0.00001):
-							var new_value = blend_shape_array[vertex_index] - base_array[vertex_index]
+							new_value = blend_shape_array[vertex_index] - base_array[vertex_index]
 							var insert_blend_vertex_ret = insert_blend_vertex(blend_verticies, vertex_index, array_index, new_value, format)
 							blend_verticies = insert_blend_vertex_ret.blend_verticies
 							format = insert_blend_vertex_ret.format
