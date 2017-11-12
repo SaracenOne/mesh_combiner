@@ -13,9 +13,14 @@ static func get_surface_arrays_format(p_surface_arrays):
 	var format = 0
 	for i in range(0, p_surface_arrays.size()):
 		var array = p_surface_arrays[i]
-		if(array != null):
+		if(typeof(array) != TYPE_NIL):
 			format |= (1<<i);
 	return format
+	
+static func convert_vector2_to_vector3_pool_array(p_vec2_array):
+	var out = PoolVector3Array()
+	for i in range(0, p_vec2_array.size()):
+		out.append(Vector3(p_vec2_array[i].x, p_vec2_array[i].y, 0.0))
 
 static func strip_blend_shape_format(p_format):
 	if p_format & ArrayMesh.ARRAY_FORMAT_BONES:
@@ -34,76 +39,99 @@ func find_surface_by_name(p_surface_name):
 
 	return -1
 
-func generate_mesh():
+func generate_mesh(p_compression_flags = 0):
 	var mesh = ArrayMesh.new()
 
 	for blend_shape_name in blend_shape_names:
 		mesh.add_blend_shape(blend_shape_name)
 
 	for surface in surfaces:
-		mesh.add_surface_from_arrays(surface.primitive, surface.arrays, surface.morph_arrays)
+		mesh.add_surface_from_arrays(surface.primitive, surface.arrays, surface.morph_arrays, p_compression_flags)
 		mesh.surface_set_name(mesh.get_surface_count() - 1, surface.name)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, surface.material)
 	mesh.set_blend_shape_mode(blend_shape_mode)
 
 	return mesh
 
-static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_format, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_transform = Transform()):
+static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_format, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_uv2_min = Vector2(0.0, 0.0), p_uv2_max = Vector2(1.0, 1.0), p_transform = Transform(), p_weld_distance = -1.0):
 	var combined_surface_array = []
 
-	for i in range(0, ArrayMesh.ARRAY_MAX):
+	for array_index in range(0, ArrayMesh.ARRAY_MAX):
 		var combined_array = null
-		if p_original_format & (1<<i):
-			var new_array = p_new_arrays[i]
+		if p_original_format & (1 << array_index):
+			var new_array = p_new_arrays[array_index]
 			var original_array = null
-			if(p_original_arrays != null):
-				original_array = p_original_arrays[i]
-			if i == ArrayMesh.ARRAY_INDEX:
+			
+			if(typeof(p_original_arrays) == TYPE_ARRAY):
+				original_array = p_original_arrays[array_index]
+				
+			if array_index == ArrayMesh.ARRAY_INDEX:
 				combined_array = PoolIntArray()
 				var original_surface_index_count = 0
 				
-				if(p_original_arrays != null):
+				if(typeof(p_original_arrays) == TYPE_ARRAY):
 					original_surface_index_count = p_original_arrays[ArrayMesh.ARRAY_VERTEX].size()
 					
-				if(original_array != null):
-					for j in range(0, original_array.size()):
-						combined_array.append(original_array[j])
+				if(typeof(original_array) != TYPE_NIL):
+					for i in range(0, original_array.size()):
+						combined_array.append(original_array[i])
 				
-				if(new_array != null):
-					for j in range(0, new_array.size()):
-						combined_array.append(original_surface_index_count + new_array[j])
+				if(typeof(new_array) != TYPE_NIL):
+					for i in range(0, new_array.size()):
+						combined_array.append(original_surface_index_count + new_array[i])
 			else:
-				if i == ArrayMesh.ARRAY_TANGENT or i == ArrayMesh.ARRAY_WEIGHTS or i == ArrayMesh.ARRAY_BONES:
+				if array_index == ArrayMesh.ARRAY_TANGENT or array_index == ArrayMesh.ARRAY_WEIGHTS or array_index == ArrayMesh.ARRAY_BONES:
 					combined_array = PoolRealArray()
-				elif i == ArrayMesh.ARRAY_COLOR:
+				elif array_index == ArrayMesh.ARRAY_COLOR:
 					combined_array = PoolColorArray()
+				elif array_index == ArrayMesh.ARRAY_TEX_UV or array_index == ArrayMesh.ARRAY_TEX_UV2:
+					combined_array = PoolVector2Array()
 				else:
 					combined_array = PoolVector3Array()
 					
-				if(original_array != null):
-					for j in range(0, original_array.size()):
-						combined_array.append(original_array[j])
+				if(typeof(original_array) != TYPE_NIL):
+					for i in range(0, original_array.size()):
+						combined_array.append(original_array[i])
+						
 				# Do we need to resize the UV?
-				if(new_array != null):
-					if i == ArrayMesh.ARRAY_TEX_UV and (p_uv_min != Vector2(0.0, 0.0) or p_uv_max != Vector2(1.0, 1.0)):
+				# TODO check: these might be some issues with UV vector size (2/3)
+				if(typeof(new_array) != TYPE_NIL):
+					if array_index == ArrayMesh.ARRAY_TEX_UV and (p_uv_min != Vector2(0.0, 0.0) or p_uv_max != Vector2(1.0, 1.0)):
 						var uv_min3 = Vector3(p_uv_min.x, p_uv_min.y, 0.0)
 						var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
-						for j in range(0, new_array.size()):
-							combined_array.append(uv_min3 + (new_array[j] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3))
-					elif ((i == ArrayMesh.ARRAY_VERTEX) and p_transform != Transform()):
-						for j in range(0, new_array.size()):
-							combined_array.append(p_transform.xform(new_array[j]))
-					elif ((i == ArrayMesh.ARRAY_NORMAL) and p_transform != Transform()):
-						for j in range(0, new_array.size()):
-							combined_array.append(p_transform.basis.xform(new_array[j]))
+						for i in range(0, new_array.size()):
+							combined_array.append(uv_min3 + (new_array[i] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3))
+					elif array_index == ArrayMesh.ARRAY_TEX_UV2 and (p_uv2_min != Vector2(0.0, 0.0) or p_uv2_max != Vector2(1.0, 1.0)):
+						var uv_min3 = Vector3(p_uv2_min.x, p_uv2_min.y, 0.0)
+						var uv_max3 = Vector3(p_uv2_max.x, p_uv2_max.y, 0.0)
+						for i in range(0, new_array.size()):
+							combined_array.append(uv_min3 + (new_array[i] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3))
+					elif ((array_index == ArrayMesh.ARRAY_VERTEX) and p_transform != Transform()):
+						# If a p_weld_distance is specified, we will attempt to copy the closest existing vertex
+						# already in the array in order to avoid cracks in the final mesh.
+						if 0: #p_weld_distance >= 0.0:
+							for i in range(0, new_array.size()):
+								var new_vertex = p_transform.xform(new_array[i])
+								if(typeof(original_array) == TYPE_VECTOR3_ARRAY):
+									for j in range(0, original_array.size()):
+										if original_array[j].distance_to(new_vertex) < p_weld_distance:
+											new_vertex = original_array[j]
+											break
+								combined_array.append(new_vertex)
+						else:
+							for i in range(0, new_array.size()):
+								combined_array.append(p_transform.xform(new_array[i]))
+					elif ((array_index == ArrayMesh.ARRAY_NORMAL) and p_transform != Transform()):
+						for i in range(0, new_array.size()):
+							combined_array.append(p_transform.basis.xform(new_array[i]))
 					else:
-						for j in range(0, new_array.size()):
-							combined_array.append(new_array[j])
+						for i in range(0, new_array.size()):
+							combined_array.append(new_array[i])
 		combined_surface_array.append(combined_array)
 
 	return combined_surface_array
 	
-func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_transform = Transform()):
+func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_uv2_min = Vector2(0.0, 0.0), p_uv2_max = Vector2(1.0, 1.0), p_transform = Transform(), p_weld_distance = -1.0):
 	if p_addition_mesh is ArrayMesh:
 		var new_append_mesh_combiner = Reference.new()
 		new_append_mesh_combiner.set_script(get_script())
@@ -114,7 +142,22 @@ func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vecto
 			new_surface.primitive = p_addition_mesh.surface_get_primitive_type(i)
 			new_surface.material = p_addition_mesh.surface_get_material(i)
 			new_surface.arrays = p_addition_mesh.surface_get_arrays(i)
+			
+			# Make sure all standard arrays are PoolVector3Arrays
+			for j in range(0, new_surface.arrays.size()):
+				if j == ArrayMesh.ARRAY_VERTEX or j == ArrayMesh.ARRAY_NORMAL or j == ArrayMesh.ARRAY_TANGENT:
+					if typeof(new_surface.arrays[j]) == TYPE_VECTOR2_ARRAY:
+						new_surface.arrays[j] = convert_vector2_to_vector3_pool_array(new_surface.arrays[j])
+					
 			new_surface.morph_arrays = p_addition_mesh.surface_get_blend_shape_arrays(i)
+			
+			# Does this actually work? Todo: test
+			for morph_array in new_surface.morph_arrays:
+				for j in range(0, morph_array.size()):
+					if j == ArrayMesh.ARRAY_VERTEX or j == ArrayMesh.ARRAY_NORMAL or j == ArrayMesh.ARRAY_TANGENT:
+						if typeof(morph_array[j]) == TYPE_VECTOR2_ARRAY:
+							morph_array[j] = convert_vector2_to_vector3_pool_array(morph_array[j])
+			
 			new_append_mesh_combiner.surfaces.append(new_surface)
 			
 			var format = p_addition_mesh.surface_get_format(i) & SURFACE_FORMAT_BITS
@@ -125,9 +168,19 @@ func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vecto
 		
 		new_append_mesh_combiner.blend_shape_mode = p_addition_mesh.get_blend_shape_mode()
 	
-		append_mesh_combiner(new_append_mesh_combiner, p_uv_min, p_uv_max, p_transform)
+		append_mesh_combiner(new_append_mesh_combiner, p_uv2_min, p_uv_max, p_uv_min, p_uv2_max, p_transform, p_weld_distance)
 	
-func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_transform = Transform()):
+static func scaled_uv_array(p_tex_uv_array, p_uv_min, p_uv_max):
+	var tex_uv_array = p_tex_uv_array
+	
+	var uv_min3 = Vector3(p_uv_min.x, p_uv_min.y, 0.0)
+	var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
+	for i in range(0, tex_uv_array.size()):
+		tex_uv_array[i] = uv_min3 + (tex_uv_array[i] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3)
+	
+	return tex_uv_array
+	
+func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_uv2_min = Vector2(0.0, 0.0), p_uv2_max = Vector2(1.0, 1.0), p_transform = Transform(), p_weld_distance = -1.0):
 	if(p_addition == null):
 		return
 
@@ -176,7 +229,7 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 			# This surface does not have match in the new set
 			# Simply add in the new blend shapes /
 			for j in range(0, new_blend_shape_names.size()):
-				surfaces[i].morph_arrays.append(combine_surface_arrays(null, surfaces[i].arrays, morph_surface_format, p_uv_min, p_uv_max, p_transform)) # Copy blend data for additional blend tracks (?)
+				surfaces[i].morph_arrays.append(combine_surface_arrays(null, surfaces[i].arrays, morph_surface_format, p_uv_min, p_uv_max, p_uv2_min, p_uv2_max, p_transform, p_weld_distance)) # Copy blend data for additional blend tracks (?)
 		else:
 			# This surface has a matching surface name in the new set
 			# Combine the verticies and blend shapes
@@ -189,20 +242,21 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 				var index = addition_blend_shape_names.find(blend_shape_names[j])
 				if index != -1:
 					# Append the additional morph data onto the original morph data
-					surfaces[i].morph_arrays[j] = combine_surface_arrays(surfaces[i].morph_arrays[j], new_surface.morph_arrays[index], morph_surface_format, p_uv_min, p_uv_max, p_transform)
+					surfaces[i].morph_arrays[j] = combine_surface_arrays(surfaces[i].morph_arrays[j], new_surface.morph_arrays[index], morph_surface_format, p_uv_min, p_uv_max, p_uv2_min, p_uv2_max, p_transform, p_weld_distance)
 				else:
 					# Append the copy of the new surface to use as dummy morph data extension
-					surfaces[i].morph_arrays[j] = combine_surface_arrays(surfaces[i].morph_arrays[j], new_surface.arrays, morph_surface_format, p_uv_min, p_uv_max, p_transform)
+					surfaces[i].morph_arrays[j] = combine_surface_arrays(surfaces[i].morph_arrays[j], new_surface.arrays, morph_surface_format, p_uv_min, p_uv_max, p_uv2_min, p_uv2_max, p_transform, p_weld_distance)
 					
 			# Add blend shapes unique to this set
 			for j in range(0, new_blend_shape_names.size()):
 				var index = addition_blend_shape_names.find(new_blend_shape_names[j])
 				if index != -1:
 					# Append the additional morph data onto a copy of the untouched surface arrays
-					surfaces[i].morph_arrays.append(combine_surface_arrays(surfaces[i].arrays, new_surface.morph_arrays[index], morph_surface_format, p_uv_min, p_uv_max, p_transform))
+					surfaces[i].morph_arrays.append(combine_surface_arrays(surfaces[i].arrays, new_surface.morph_arrays[index], morph_surface_format, p_uv_min, p_uv_max, p_uv2_min, p_uv2_max, p_transform, p_weld_distance))
 					
 			# Append the extra surface data
-			surfaces[i].arrays = combine_surface_arrays(surfaces[i].arrays, new_surface.arrays, original_surface_format, p_uv_min, p_uv_max, p_transform)
+			surfaces[i].arrays = combine_surface_arrays(surfaces[i].arrays, new_surface.arrays, original_surface_format, p_uv_min, p_uv_max, p_uv2_min, p_uv2_max, p_transform, p_weld_distance)
+			
 	for i in range(0, p_addition.surfaces.size()):
 		var new_surface = p_addition.surfaces[i]
 		if find_surface_by_name(new_surface.name) == -1:
@@ -219,27 +273,24 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 			for j in range(0, blend_shape_names.size()):
 				var index = addition_blend_shape_names.find(blend_shape_names[j])
 				if index != -1:
-					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface_morph_array[index], morph_surface_format, p_uv_min, p_uv_max, p_transform))
+					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface_morph_array[index], morph_surface_format, p_uv_min, p_uv_max, p_uv2_min, p_uv2_max, p_transform, p_weld_distance))
 				else:
-					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface.arrays, morph_surface_format, p_uv_min, p_uv_max, p_transform))
+					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface.arrays, morph_surface_format, p_uv_min, p_uv_max, p_uv2_min, p_uv2_max, p_transform, p_weld_distance))
 
 			# Add blend shapes unique to this set
 			for j in range(0, new_blend_shape_names.size()):
 				var index = addition_blend_shape_names.find(new_blend_shape_names[j])
 				if not index == -1:
-					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface_morph_array[index], morph_surface_format, p_uv_min, p_uv_max, p_transform))
+					new_surface.morph_arrays.append(combine_surface_arrays(null, new_surface_morph_array[index], morph_surface_format, p_uv_min, p_uv_max, p_uv2_min, p_uv2_max, p_transform, p_weld_distance))
 
 			# Now add it to the list of new surface
 			if p_uv_min != Vector2(0.0, 0.0) or p_uv_max != Vector2(1.0, 1.0):
 				if new_surface.arrays.size() >= ArrayMesh.ARRAY_TEX_UV:
-					var tex_uv_array = new_surface.arrays[ArrayMesh.ARRAY_TEX_UV]
+					new_surface.arrays[ArrayMesh.ARRAY_TEX_UV] = scaled_uv_array(new_surface.arrays[ArrayMesh.ARRAY_TEX_UV], p_uv_min, p_uv_max)
 					
-					var uv_min3 = Vector3(p_uv_min.x, p_uv_min.y, 0.0)
-					var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
-					for j in range(0, tex_uv_array.size()):
-						tex_uv_array[j] = uv_min3 + (tex_uv_array[j] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3)
-					
-					new_surface.arrays[ArrayMesh.ARRAY_TEX_UV] = tex_uv_array
+			if p_uv2_min != Vector2(0.0, 0.0) or p_uv2_max != Vector2(1.0, 1.0):
+				if new_surface.arrays.size() >= ArrayMesh.ARRAY_TEX_UV2:					
+					new_surface.arrays[ArrayMesh.ARRAY_TEX_UV2] = scaled_uv_array(new_surface.arrays[ArrayMesh.ARRAY_TEX_UV2], p_uv2_min, p_uv2_max)
 			
 			# Transform the verticies
 			if p_transform != Transform():

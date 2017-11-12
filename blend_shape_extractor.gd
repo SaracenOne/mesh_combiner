@@ -34,9 +34,9 @@ static func extract_blend_shape_from_mesh_combiner(p_mesh_combiner, p_blend_shap
 		for mesh_surface in p_mesh_combiner.surfaces:
 			var blend_shape_surface = {}
 			blend_shape_surface.name = mesh_surface.name
-			blend_shape_surface.index_array = IntArray()
-			blend_shape_surface.position_array = Vector3Array()
-			blend_shape_surface.normal_array = Vector3Array()
+			blend_shape_surface.index_array = PoolIntArray()
+			blend_shape_surface.position_array = PoolVector3Array()
+			blend_shape_surface.normal_array = PoolVector3Array()
 			
 			var base_arrays = mesh_surface.arrays
 			var blend_shape_arrays = mesh_surface.morph_arrays[index]
@@ -57,9 +57,9 @@ static func extract_blend_shape_from_mesh_combiner(p_mesh_combiner, p_blend_shap
 							blend_verticies = insert_blend_vertex_ret.blend_verticies
 							format = insert_blend_vertex_ret.format
 			
-			var index_array = IntArray()
-			var position_array = Vector3Array()
-			var normal_array = Vector3Array()
+			var index_array = PoolIntArray()
+			var position_array = PoolVector3Array()
+			var normal_array = PoolVector3Array()
 			
 			for blend_index in blend_verticies.keys():
 				var blend_vertex = blend_verticies[blend_index]
