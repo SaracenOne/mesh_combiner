@@ -4,6 +4,10 @@ importer="texture"
 type="StreamTexture"
 path="res://.import/icon_blend_shape_data.png-939e9569326a8809089d975c534f773e.stex"
 
+[deps]
+
+source_md5="58bd3d3fb6c0e40e304f7227c7e43093"
+
 [params]
 
 compress/mode=0
