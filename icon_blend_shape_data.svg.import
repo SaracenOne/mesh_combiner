@@ -6,7 +6,8 @@ path="res://.import/icon_blend_shape_data.svg-3565fc9466ba6315358bc51859c95f61.s
 
 [deps]
 
-source_md5="c4f6cf3e706350db9880f794e30293ba"
+source_file="res://addons/mesh_combiner/icon_blend_shape_data.svg"
+dest_files=[ "res://.import/icon_blend_shape_data.svg-3565fc9466ba6315358bc51859c95f61.stex" ]
 
 [params]
 
@@ -22,6 +23,7 @@ flags/srgb=2
 process/fix_alpha_border=true
 process/premult_alpha=false
 process/HDR_as_SRGB=false
+process/invert_color=false
 stream=false
 size_limit=0
 detect_3d=true

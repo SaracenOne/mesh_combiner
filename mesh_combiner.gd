@@ -128,10 +128,28 @@ static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_f
 						for i in range(0, new_array.size()):
 							combined_array.append(new_array[i])
 		combined_surface_array.append(combined_array)
-
+		
 	return combined_surface_array
 	
-func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_uv2_min = Vector2(0.0, 0.0), p_uv2_max = Vector2(1.0, 1.0), p_transform = Transform(), p_weld_distance = -1.0):
+static func scaled_uv_array(p_tex_uv_array, p_uv_min, p_uv_max):
+	var tex_uv_array = p_tex_uv_array
+	
+	var uv_min3 = Vector3(p_uv_min.x, p_uv_min.y, 0.0)
+	var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
+	for i in range(0, tex_uv_array.size()):
+		tex_uv_array[i] = uv_min3 + (tex_uv_array[i] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3)
+	
+	return tex_uv_array
+	
+static func remapped_bone_array(p_bone_array, p_bone_remaps):
+	var bone_array = p_bone_array
+	
+	for i in range(0, bone_array.size()):
+		bone_array[i] = p_bone_remaps[bone_array[i]]
+	
+	return bone_array
+	
+func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_uv2_min = Vector2(0.0, 0.0), p_uv2_max = Vector2(1.0, 1.0), p_transform = Transform(), p_bone_remaps = PoolIntArray(), p_weld_distance = -1.0):
 	if p_addition_mesh is ArrayMesh:
 		var new_append_mesh_combiner = Reference.new()
 		new_append_mesh_combiner.set_script(get_script())
@@ -148,6 +166,9 @@ func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vecto
 				if j == ArrayMesh.ARRAY_VERTEX or j == ArrayMesh.ARRAY_NORMAL or j == ArrayMesh.ARRAY_TANGENT:
 					if typeof(new_surface.arrays[j]) == TYPE_VECTOR2_ARRAY:
 						new_surface.arrays[j] = convert_vector2_to_vector3_pool_array(new_surface.arrays[j])
+				if j == ArrayMesh.ARRAY_BONES:
+					if p_bone_remaps.size() > 0:
+						new_surface.arrays[j] = remapped_bone_array(new_surface.arrays[j], p_bone_remaps)
 					
 			new_surface.morph_arrays = p_addition_mesh.surface_get_blend_shape_arrays(i)
 			
@@ -157,6 +178,9 @@ func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vecto
 					if j == ArrayMesh.ARRAY_VERTEX or j == ArrayMesh.ARRAY_NORMAL or j == ArrayMesh.ARRAY_TANGENT:
 						if typeof(morph_array[j]) == TYPE_VECTOR2_ARRAY:
 							morph_array[j] = convert_vector2_to_vector3_pool_array(morph_array[j])
+					if j == ArrayMesh.ARRAY_BONES:
+						if p_bone_remaps.size() > 0:
+							morph_array[j] = remapped_bone_array(new_surface.arrays[j], p_bone_remaps)
 			
 			new_append_mesh_combiner.surfaces.append(new_surface)
 			
@@ -170,17 +194,7 @@ func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vecto
 	
 		append_mesh_combiner(new_append_mesh_combiner, p_uv2_min, p_uv_max, p_uv_min, p_uv2_max, p_transform, p_weld_distance)
 	
-static func scaled_uv_array(p_tex_uv_array, p_uv_min, p_uv_max):
-	var tex_uv_array = p_tex_uv_array
-	
-	var uv_min3 = Vector3(p_uv_min.x, p_uv_min.y, 0.0)
-	var uv_max3 = Vector3(p_uv_max.x, p_uv_max.y, 0.0)
-	for i in range(0, tex_uv_array.size()):
-		tex_uv_array[i] = uv_min3 + (tex_uv_array[i] * uv_max3) * (Vector3(1.0, 1.0, 0.0) - uv_min3)
-	
-	return tex_uv_array
-	
-func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_uv2_min = Vector2(0.0, 0.0), p_uv2_max = Vector2(1.0, 1.0), p_transform = Transform(), p_weld_distance = -1.0):
+func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_uv2_min = Vector2(0.0, 0.0), p_uv2_max = Vector2(1.0, 1.0), p_transform = Transform(), p_weld_distance = -1.0, p_bone_remaps = []):
 	if(p_addition == null):
 		return
 
@@ -318,6 +332,39 @@ func remove_blend_shape(p_blend_shape_name):
 		blend_shape_names.remove(index)
 		for surface in surfaces:
 			surface.morph_arrays.remove(index)
+			
+static func combine_skeletons(p_target_skeleton, p_addition_skeleton):
+	var bone_remap_table = PoolIntArray()
+	
+	for i in range(0, p_addition_skeleton.get_bone_count()):
+		var addition_bone_name = p_addition_skeleton.get_bone_name(i)
+		
+		var bone_id = p_target_skeleton.find_bone(addition_bone_name)
+		if bone_id != -1:
+			# Bone has a match in the target skeleton, so just add this to the table
+			bone_remap_table.push_back(bone_id)
+		else:
+			# New bone, so add it to the target skeleton
+			p_target_skeleton.add_bone(addition_bone_name)
+			# Check to see if this new bone has a parent
+			var bone_parent = p_addition_skeleton.get_bone_parent(i)
+			if bone_parent != -1:
+				# Now get the name of this bone's parent
+				var bone_parent_name = p_addition_skeleton.get_bone_name(bone_parent)
+				#  Now find the bone ID for this parent in the target skeleton
+				var target_id = p_target_skeleton.find_bone(bone_parent_name)
+				if target_id != -1:
+					# Set this new bone's parent
+					p_target_skeleton.set_bone_parent(p_target_skeleton.get_bone_count()-1, target_id)
+			
+			# Copy over the pose and rest for this new bone
+			p_target_skeleton.set_bone_pose(p_target_skeleton.get_bone_count()-1, p_addition_skeleton.get_bone_pose(i))
+			p_target_skeleton.set_bone_rest(p_target_skeleton.get_bone_count()-1, p_addition_skeleton.get_bone_rest(i))
+			
+			# Add this new bone to the table
+			bone_remap_table.push_back(p_target_skeleton.get_bone_count()-1)
+			
+	return bone_remap_table
 
 func clear():
 	surfaces = []
