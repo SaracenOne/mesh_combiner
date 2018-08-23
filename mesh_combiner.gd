@@ -109,7 +109,7 @@ static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_f
 					elif ((array_index == ArrayMesh.ARRAY_VERTEX) and p_transform != Transform()):
 						# If a p_weld_distance is specified, we will attempt to copy the closest existing vertex
 						# already in the array in order to avoid cracks in the final mesh.
-						if 0: #p_weld_distance >= 0.0:
+						if p_weld_distance >= 0.0:
 							for i in range(0, new_array.size()):
 								var new_vertex = p_transform.xform(new_array[i])
 								if(typeof(original_array) == TYPE_VECTOR3_ARRAY):
