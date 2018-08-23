@@ -150,47 +150,62 @@ static func remapped_bone_array(p_bone_array, p_bone_remaps):
 	return bone_array
 	
 func append_mesh(p_addition_mesh, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_uv2_min = Vector2(0.0, 0.0), p_uv2_max = Vector2(1.0, 1.0), p_transform = Transform(), p_bone_remaps = PoolIntArray(), p_weld_distance = -1.0):
-	if p_addition_mesh is ArrayMesh:
+	if p_addition_mesh is ArrayMesh or p_addition_mesh is PrimitiveMesh:
 		var new_append_mesh_combiner = Reference.new()
 		new_append_mesh_combiner.set_script(get_script())
 	
-		for i in range(p_addition_mesh.get_surface_count()):
-			var new_surface = {}
-			new_surface.name = p_addition_mesh.surface_get_name(i)
-			new_surface.primitive = p_addition_mesh.surface_get_primitive_type(i)
-			new_surface.material = p_addition_mesh.surface_get_material(i)
-			new_surface.arrays = p_addition_mesh.surface_get_arrays(i)
-			
-			# Make sure all standard arrays are PoolVector3Arrays
-			for j in range(0, new_surface.arrays.size()):
-				if j == ArrayMesh.ARRAY_VERTEX or j == ArrayMesh.ARRAY_NORMAL or j == ArrayMesh.ARRAY_TANGENT:
-					if typeof(new_surface.arrays[j]) == TYPE_VECTOR2_ARRAY:
-						new_surface.arrays[j] = convert_vector2_to_vector3_pool_array(new_surface.arrays[j])
-				if j == ArrayMesh.ARRAY_BONES:
-					if p_bone_remaps.size() > 0:
-						new_surface.arrays[j] = remapped_bone_array(new_surface.arrays[j], p_bone_remaps)
-					
-			new_surface.morph_arrays = p_addition_mesh.surface_get_blend_shape_arrays(i)
-			
-			# Does this actually work? Todo: test
-			for morph_array in new_surface.morph_arrays:
-				for j in range(0, morph_array.size()):
+		if p_addition_mesh is ArrayMesh:
+			for i in range(p_addition_mesh.get_surface_count()):
+				var new_surface = {}
+				new_surface.name = p_addition_mesh.surface_get_name(i)
+				new_surface.primitive = p_addition_mesh.surface_get_primitive_type(i)
+				new_surface.material = p_addition_mesh.surface_get_material(i)
+				new_surface.arrays = p_addition_mesh.surface_get_arrays(i)
+				
+				# Make sure all standard arrays are PoolVector3Arrays
+				for j in range(0, new_surface.arrays.size()):
 					if j == ArrayMesh.ARRAY_VERTEX or j == ArrayMesh.ARRAY_NORMAL or j == ArrayMesh.ARRAY_TANGENT:
-						if typeof(morph_array[j]) == TYPE_VECTOR2_ARRAY:
-							morph_array[j] = convert_vector2_to_vector3_pool_array(morph_array[j])
+						if typeof(new_surface.arrays[j]) == TYPE_VECTOR2_ARRAY:
+							new_surface.arrays[j] = convert_vector2_to_vector3_pool_array(new_surface.arrays[j])
 					if j == ArrayMesh.ARRAY_BONES:
 						if p_bone_remaps.size() > 0:
-							morph_array[j] = remapped_bone_array(new_surface.arrays[j], p_bone_remaps)
+							new_surface.arrays[j] = remapped_bone_array(new_surface.arrays[j], p_bone_remaps)
+						
+				new_surface.morph_arrays = p_addition_mesh.surface_get_blend_shape_arrays(i)
+				
+				# Does this actually work? Todo: test
+				for morph_array in new_surface.morph_arrays:
+					for j in range(0, morph_array.size()):
+						if j == ArrayMesh.ARRAY_VERTEX or j == ArrayMesh.ARRAY_NORMAL or j == ArrayMesh.ARRAY_TANGENT:
+							if typeof(morph_array[j]) == TYPE_VECTOR2_ARRAY:
+								morph_array[j] = convert_vector2_to_vector3_pool_array(morph_array[j])
+						if j == ArrayMesh.ARRAY_BONES:
+							if p_bone_remaps.size() > 0:
+								morph_array[j] = remapped_bone_array(new_surface.arrays[j], p_bone_remaps)
+				
+				new_append_mesh_combiner.surfaces.append(new_surface)
+				
+				var format = p_addition_mesh.surface_get_format(i) & SURFACE_FORMAT_BITS
+				new_append_mesh_combiner.surface_formats.append(format)
+		
+			for i in range(p_addition_mesh.get_blend_shape_count()):
+				new_append_mesh_combiner.blend_shape_names.append(p_addition_mesh.get_blend_shape_name(i))
+		
+			new_append_mesh_combiner.blend_shape_mode = p_addition_mesh.get_blend_shape_mode()
+		elif p_addition_mesh is PrimitiveMesh:
+			var new_surface = {}
+			new_surface.name = "PrimitiveMeshSurface"
+			new_surface.primitive = ArrayMesh.PRIMITIVE_TRIANGLES
+			new_surface.material = p_addition_mesh.material
+			new_surface.arrays = p_addition_mesh.get_mesh_arrays()
+			new_surface.morph_arrays = []
 			
 			new_append_mesh_combiner.surfaces.append(new_surface)
 			
-			var format = p_addition_mesh.surface_get_format(i) & SURFACE_FORMAT_BITS
+			# TODO: While this is currently correct for builtin primitives, it might still be worth exposing the format to C++ code for the sake of custom primitives
+			var format = ArrayMesh.ARRAY_FORMAT_VERTEX + ArrayMesh.ARRAY_FORMAT_NORMAL + ArrayMesh.ARRAY_FORMAT_TANGENT + ArrayMesh.ARRAY_FORMAT_TEX_UV + ArrayMesh.ARRAY_FORMAT_INDEX
 			new_append_mesh_combiner.surface_formats.append(format)
 		
-		for i in range(p_addition_mesh.get_blend_shape_count()):
-			new_append_mesh_combiner.blend_shape_names.append(p_addition_mesh.get_blend_shape_name(i))
-		
-		new_append_mesh_combiner.blend_shape_mode = p_addition_mesh.get_blend_shape_mode()
 	
 		append_mesh_combiner(new_append_mesh_combiner, p_uv2_min, p_uv_max, p_uv_min, p_uv2_max, p_transform, p_weld_distance)
 	
