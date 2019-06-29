@@ -1,28 +1,31 @@
 tool
 extends Reference
+class_name MeshCombiner
 
 const SURFACE_FORMAT_BITS = ArrayMesh.ARRAY_FORMAT_VERTEX + ArrayMesh.ARRAY_FORMAT_NORMAL + ArrayMesh.ARRAY_FORMAT_TANGENT + ArrayMesh.ARRAY_FORMAT_COLOR + ArrayMesh.ARRAY_FORMAT_TEX_UV + ArrayMesh.ARRAY_FORMAT_TEX_UV2 + ArrayMesh.ARRAY_FORMAT_BONES + ArrayMesh.ARRAY_FORMAT_WEIGHTS + ArrayMesh.ARRAY_FORMAT_INDEX
 
-var surfaces = []
-var surface_formats = []
+var surfaces : Array = []
+var surface_formats : Array = []
 
-var blend_shape_names = []
-var blend_shape_mode = -1
+var blend_shape_names : Array = []
+var blend_shape_mode : int = -1
 
-static func get_surface_arrays_format(p_surface_arrays):
-	var format = 0
+static func get_surface_arrays_format(p_surface_arrays : Array) -> int:
+	var format : int = 0
 	for i in range(0, p_surface_arrays.size()):
-		var array = p_surface_arrays[i]
+		var array : Array = p_surface_arrays[i]
 		if(typeof(array) != TYPE_NIL):
 			format |= (1<<i);
 	return format
 	
-static func convert_vector2_to_vector3_pool_array(p_vec2_array):
-	var out = PoolVector3Array()
+static func convert_vector2_to_vector3_pool_array(p_vec2_array : PoolVector2Array) -> PoolVector3Array:
+	var out : PoolVector3Array = PoolVector3Array()
 	for i in range(0, p_vec2_array.size()):
 		out.append(Vector3(p_vec2_array[i].x, p_vec2_array[i].y, 0.0))
+		
+	return out
 
-static func strip_blend_shape_format(p_format):
+static func strip_blend_shape_format(p_format : int) -> int:
 	if p_format & ArrayMesh.ARRAY_FORMAT_BONES:
 		p_format -= ArrayMesh.ARRAY_FORMAT_BONES
 	if p_format & ArrayMesh.ARRAY_FORMAT_WEIGHTS:
@@ -31,16 +34,16 @@ static func strip_blend_shape_format(p_format):
 		p_format -= ArrayMesh.ARRAY_FORMAT_INDEX
 	return p_format
 
-func find_surface_by_name(p_surface_name):
+func find_surface_by_name(p_surface_name : String) -> int:
 	for i in range(0, surfaces.size()):
-		var surface = surfaces[i]
+		var surface : Dictionary = surfaces[i]
 		if(surface.name == p_surface_name):
 			return i
 
 	return -1
 
-func generate_mesh(p_compression_flags = 0):
-	var mesh = ArrayMesh.new()
+func generate_mesh(p_compression_flags : int = 0) -> ArrayMesh:
+	var mesh : ArrayMesh = ArrayMesh.new()
 
 	for blend_shape_name in blend_shape_names:
 		mesh.add_blend_shape(blend_shape_name)
@@ -53,8 +56,18 @@ func generate_mesh(p_compression_flags = 0):
 
 	return mesh
 
-static func combine_surface_arrays(p_original_arrays, p_new_arrays, p_original_format, p_uv_min = Vector2(0.0, 0.0), p_uv_max = Vector2(1.0, 1.0), p_uv2_min = Vector2(0.0, 0.0), p_uv2_max = Vector2(1.0, 1.0), p_transform = Transform(), p_weld_distance = -1.0):
-	var combined_surface_array = []
+# Unoptimised and untyped...
+static func combine_surface_arrays(
+	p_original_arrays,
+	p_new_arrays,
+	p_original_format,
+	p_uv_min = Vector2(0.0, 0.0),
+	p_uv_max = Vector2(1.0, 1.0),
+	p_uv2_min = Vector2(0.0, 0.0),
+	p_uv2_max = Vector2(1.0, 1.0),
+	p_transform = Transform(),
+	p_weld_distance = -1.0) -> Array:
+	var combined_surface_array : Array = []
 
 	for array_index in range(0, ArrayMesh.ARRAY_MAX):
 		var combined_array = null
@@ -341,20 +354,20 @@ func append_mesh_combiner(p_addition, p_uv_min = Vector2(0.0, 0.0), p_uv_max = V
 	for i in range(0, new_blend_shape_names.size()):
 		blend_shape_names.append(new_blend_shape_names[i])
 
-func remove_blend_shape(p_blend_shape_name):
-	var index = blend_shape_names.find(p_blend_shape_name)
+func remove_blend_shape(p_blend_shape_name : String) -> void:
+	var index : int = blend_shape_names.find(p_blend_shape_name)
 	if index != -1:
 		blend_shape_names.remove(index)
 		for surface in surfaces:
 			surface.morph_arrays.remove(index)
 			
-static func combine_skeletons(p_target_skeleton, p_addition_skeleton):
-	var bone_remap_table = PoolIntArray()
+static func combine_skeletons(p_target_skeleton : Skeleton, p_addition_skeleton : Skeleton) -> PoolIntArray:
+	var bone_remap_table : PoolIntArray = PoolIntArray()
 	
 	for i in range(0, p_addition_skeleton.get_bone_count()):
-		var addition_bone_name = p_addition_skeleton.get_bone_name(i)
+		var addition_bone_name : String = p_addition_skeleton.get_bone_name(i)
 		
-		var bone_id = p_target_skeleton.find_bone(addition_bone_name)
+		var bone_id : int = p_target_skeleton.find_bone(addition_bone_name)
 		if bone_id != -1:
 			# Bone has a match in the target skeleton, so just add this to the table
 			bone_remap_table.push_back(bone_id)
@@ -362,26 +375,26 @@ static func combine_skeletons(p_target_skeleton, p_addition_skeleton):
 			# New bone, so add it to the target skeleton
 			p_target_skeleton.add_bone(addition_bone_name)
 			# Check to see if this new bone has a parent
-			var bone_parent = p_addition_skeleton.get_bone_parent(i)
+			var bone_parent : int = p_addition_skeleton.get_bone_parent(i)
 			if bone_parent != -1:
 				# Now get the name of this bone's parent
-				var bone_parent_name = p_addition_skeleton.get_bone_name(bone_parent)
+				var bone_parent_name : String = p_addition_skeleton.get_bone_name(bone_parent)
 				#  Now find the bone ID for this parent in the target skeleton
-				var target_id = p_target_skeleton.find_bone(bone_parent_name)
+				var target_id : int = p_target_skeleton.find_bone(bone_parent_name)
 				if target_id != -1:
 					# Set this new bone's parent
 					p_target_skeleton.set_bone_parent(p_target_skeleton.get_bone_count()-1, target_id)
 			
 			# Copy over the pose and rest for this new bone
-			p_target_skeleton.set_bone_pose(p_target_skeleton.get_bone_count()-1, p_addition_skeleton.get_bone_pose(i))
-			p_target_skeleton.set_bone_rest(p_target_skeleton.get_bone_count()-1, p_addition_skeleton.get_bone_rest(i))
+			p_target_skeleton.set_bone_pose(p_target_skeleton.get_bone_count() - 1, p_addition_skeleton.get_bone_pose(i))
+			p_target_skeleton.set_bone_rest(p_target_skeleton.get_bone_count() - 1, p_addition_skeleton.get_bone_rest(i))
 			
 			# Add this new bone to the table
 			bone_remap_table.push_back(p_target_skeleton.get_bone_count()-1)
 			
 	return bone_remap_table
 
-func clear():
+func clear() -> void:
 	surfaces = []
 	surface_formats = []
 
