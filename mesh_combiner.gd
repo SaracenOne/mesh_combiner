@@ -37,7 +37,7 @@ static func strip_blend_shape_format(p_format : int) -> int:
 func find_surface_by_name(p_surface_name : String) -> int:
 	for i in range(0, surfaces.size()):
 		var surface : Dictionary = surfaces[i]
-		if(surface.name == p_surface_name):
+		if(surface["name"] == p_surface_name):
 			return i
 
 	return -1
